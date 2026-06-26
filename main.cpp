@@ -23,11 +23,11 @@ struct compare {
     }
 };
 
-void generateCodes(struct Node* root, std::string str , std::unordered_map<char,std::string>& huffmanCode) {
+void generateCodes(struct Node* root, std::string str , std::vector<std::string>& huffmanCode) {
     if(!root )return; // null
     // leaf node in huffman tree
     if(!root->left and !root->right){
-        huffmanCode[root->data] = str;
+        huffmanCode[static_cast<unsigned char>(root->data)] = str;
     }
     // traverse left 
     // traverse right
@@ -36,31 +36,47 @@ void generateCodes(struct Node* root, std::string str , std::unordered_map<char,
     generateCodes(root->right,str+'1',huffmanCode); // append '1' if going right
 }
 
+void freeTree(Node* root) {
+    if (!root) return;
+    freeTree(root->left);
+    freeTree(root->right);
+    delete root;
+}
+
 int main(){
     // opening the target file 
-    std::ifstream inFile("input.txt");
+    std::ifstream inFile("input.txt",std::ios::binary);
     if(!inFile) {
         std::cerr << "Cannot open the file>.\n";
         return 1;
     }
     // frequency map to count occurences of every byte 
-    std::unordered_map<char,int> freqMap;
+    unsigned int freqMap[256] ={0};
      
     char ch;
     //reads one character at a time from the file and stores it in char variable ch. The loop continues until the end of the file is reached.
     // it reads raw bytes be it spaces or newlines
     while(inFile.get(ch)) {
-        freqMap[ch]++;
+       freqMap[static_cast<unsigned char>(ch)]++;
     }
     inFile.close();
     // time to initialize the min - heap ( priority queue )
     std::priority_queue<Node*,std::vector<Node*>,compare> minHeap;
 
     // pushing all the character to map 
-    for(auto const& pair : freqMap) {
-        minHeap.push(new Node(pair.first,pair.second));
+    for(int i = 0;i<256;i++) {
+        if(freqMap[i] > 0) {
+            minHeap.push(new Node(static_cast<char>(i),freqMap[i]));
+        }
     }
     // TIME to make HUFFMAN TREE 
+    if(minHeap.size() == 1) {
+        Node* singleNode = minHeap.top();
+        minHeap.pop();
+        Node* dummyRoot = new Node('$', singleNode->freq);
+        dummyRoot->left = singleNode;
+        minHeap.push(dummyRoot);
+    }
     while(minHeap.size()!=1) {
         // pop two most rarest node (characters which appears very less)
         Node *left = minHeap.top();
@@ -81,10 +97,10 @@ int main(){
      
     Node * root = minHeap.top();
     // now I will map every char to a unique binary representation string
-    std::unordered_map<char,std::string> huffmanCode;
+    std::vector<std::string> huffmanCode(256, "");
     generateCodes(root,"",huffmanCode); 
     // now opening the file again 
-    std::ifstream inFile2("input.txt");
+    std::ifstream inFile2("input.txt",std::ios::binary);
     std::ofstream outFile("compressed.bin",std::ios::binary);
     if(!inFile2 || !outFile) {
         std::cerr <<"file streams failed.\n";
@@ -94,7 +110,7 @@ int main(){
     int bitcount = 0;
     char ch2 ;
     while (inFile2.get(ch2)) {
-        std::string code = huffmanCode[ch2];
+        std::string code = huffmanCode[static_cast<unsigned char>(ch2)];
         for(char bit : code) {
             memoryblock <<= 1; // left shifting to make more space
             if(bit=='1') {
@@ -116,7 +132,7 @@ int main(){
     outFile.close();
     // DECOMPRESSING THE BINARY FILE 
     std::ifstream inBin("compressed.bin" , std::ios::binary);
-    std::ofstream outText("decompressed.txt");
+    std::ofstream outText("decompressed.txt",std::ios::binary);
     if(!inBin || !outText) {
         std::cerr << "Cannot open files for decompression\n";
         return 1;
@@ -135,7 +151,7 @@ int main(){
             }
             // leaf node 
             if(!cur->left and !cur->right) {
-                outText << cur->data;
+                outText.put(cur->data);
                 decodedChars++;
                 cur = root;
                 if(decodedChars==totalChar) break;
@@ -144,5 +160,6 @@ int main(){
     }
     inBin.close();
     outText.close();
+    freeTree(root);
 
 }
